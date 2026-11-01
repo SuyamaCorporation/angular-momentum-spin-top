@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>角運動量 コマ 歳差運動 デモ</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 min-h-screen p-4 text-white">
+<div class="max-w-3xl mx-auto">
+  <h1 class="text-2xl font-bold text-cyan-300 mb-1">🌀 角運動量 コマ 歳差運動 デモ</h1>
+  <p class="text-slate-400 text-sm mb-4">回転するコマの歳差運動と角運動量ベクトルを視覚化します</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <!-- Canvas -->
+    <div class="md:col-span-2 bg-slate-800 rounded-xl p-3">
+      <canvas id="topCanvas" width="480" height="400" class="w-full rounded-lg" aria-label="コマの歳差運動アニメーション"></canvas>
+    </div>
+
+    <!-- Controls -->
+    <div class="space-y-4">
+      <div class="bg-slate-800 rounded-xl p-4">
+        <h2 class="text-sm font-semibold text-cyan-300 mb-3">パラメータ</h2>
+        <div class="space-y-3">
+          <div>
+            <label class="flex justify-between text-xs text-slate-400 mb-1">
+              <span>回転速度 ω</span>
+              <span id="spinVal" class="text-cyan-300">50</span>
+            </label>
+            <input type="range" id="spinRate" min="10" max="150" value="50" class="w-full accent-cyan-400"
+              aria-label="回転速度スライダー">
+          </div>
+          <div>
+            <label class="flex justify-between text-xs text-slate-400 mb-1">
+              <span>傾き角 θ</span>
+              <span id="tiltVal" class="text-cyan-300">30°</span>
+            </label>
+            <input type="range" id="tiltAngle" min="5" max="75" value="30" class="w-full accent-cyan-400"
+              aria-label="傾き角スライダー">
+          </div>
+          <div>
+            <label class="flex justify-between text-xs text-slate-400 mb-1">
+              <span>質量 m (kg)</span>
+              <span id="massVal" class="text-cyan-300">1.0</span>
+            </label>
+            <input type="range" id="massSl" min="1" max="20" value="10" class="w-full accent-cyan-400"
+              aria-label="質量スライダー">
+          </div>
+        </div>
+      </div>
+
+      <!-- Physics Display -->
+      <div class="bg-slate-800 rounded-xl p-4 text-xs space-y-2">
+        <h2 class="text-sm font-semibold text-cyan-300 mb-2">物理量</h2>
+        <div class="flex justify-between"><span class="text-slate-400">角運動量 L</span><span id="dispL" class="text-yellow-300 font-mono">-</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">重力トルク τ</span><span id="dispTau" class="text-red-300 font-mono">-</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">歳差周期 Ω</span><span id="dispOmega" class="text-green-300 font-mono">-</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">歳差周期 T</span><span id="dispT" class="text-purple-300 font-mono">-</span></div>
+      </div>
+
+      <!-- Legend -->
+      <div class="bg-slate-800 rounded-xl p-4 text-xs space-y-1">
+        <h2 class="text-sm font-semibold text-cyan-300 mb-2">凡例</h2>
+        <div class="flex items-center gap-2"><div class="w-4 h-1 bg-yellow-400"></div><span>角運動量 L</span></div>
+        <div class="flex items-center gap-2"><div class="w-4 h-1 bg-red-400"></div><span>重力トルク τ</span></div>
+        <div class="flex items-center gap-2"><div class="w-4 h-1 bg-green-400"></div><span>歳差 Ω</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Explanation -->
+  <div class="bg-slate-800 rounded-xl p-4 mt-4 text-sm text-slate-300 space-y-1">
+    <p>📐 <strong class="text-cyan-300">歳差運動</strong>：コマが傾いたとき、重力トルクによって回転軸が円を描くように回転する現象</p>
+    <p>📐 <strong class="text-yellow-300">Ω = mgr / L</strong>：歳差角速度 = 重力トルク ÷ 角運動量</p>
+    <p>📐 <strong class="text-red-300">τ = mgr sinθ</strong>：重力トルク（傾き角に依存）</p>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById("topCanvas");
+const ctx = canvas.getContext("2d");
+let animFrame;
+let precessionAngle = 0;
+const g = 9.8, r = 0.05, I = 0.001; // moment of inertia
+
+function getParams() {
+  const omega = parseFloat(document.getElementById("spinRate").value);
+  const thetaDeg = parseFloat(document.getElementById("tiltAngle").value);
+  const mass = parseFloat(document.getElementById("massSl").value) * 0.1;
+  const theta = thetaDeg * Math.PI / 180;
+  const L = I * omega;
+  const tau = mass * g * r * Math.sin(theta);
+  const Omega = tau / L;
+  return { omega, theta, thetaDeg, mass, L, tau, Omega };
+}
+
+function updateDisplays() {
+  const p = getParams();
+  document.getElementById("spinVal").textContent = p.omega.toFixed(0);
+  document.getElementById("tiltVal").textContent = p.thetaDeg + "°";
+  document.getElementById("massVal").textContent = (p.mass * 10).toFixed(1);
+  document.getElementById("dispL").textContent = (p.L * 1000).toFixed(3) + " ×10⁻³";
+  document.getElementById("dispTau").textContent = (p.tau * 1000).toFixed(3) + " ×10⁻³ Nm";
+  document.getElementById("dispOmega").textContent = p.Omega.toFixed(2) + " rad/s";
+  const T = p.Omega > 0 ? (2 * Math.PI / p.Omega) : 0;
+  document.getElementById("dispT").textContent = T.toFixed(2) + " s";
+}
+
+function drawTop() {
+  const { omega, theta, L, tau, Omega } = getParams();
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // Background grid
+  ctx.strokeStyle = "rgba(255,255,255,0.05)";
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  // Floor ellipse
+  const pivotX = W / 2, pivotY = H * 0.72;
+  ctx.save();
+  ctx.strokeStyle = "rgba(100,200,255,0.3)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.ellipse(pivotX, pivotY, 70, 20, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  // Precession orbit ellipse
+  ctx.save();
+  ctx.strokeStyle = "rgba(100,255,150,0.2)";
+  ctx.lineWidth = 1;
+  const orbitR = 70 * Math.sin(theta);
+  ctx.beginPath();
+  ctx.ellipse(pivotX, pivotY - 160 * Math.cos(theta), orbitR, orbitR * 0.3, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  // Top axis direction
+  const topLen = 160;
+  const axisX = pivotX + Math.sin(theta) * Math.cos(precessionAngle) * topLen;
+  const axisY = pivotY - Math.cos(theta) * topLen;
+
+  // Draw spinning top body
+  ctx.save();
+  ctx.translate(pivotX, pivotY);
+
+  const dirX = Math.sin(theta) * Math.cos(precessionAngle);
+  const dirY = -Math.cos(theta);
+  const angle2D = Math.atan2(dirX, -dirY);
+  ctx.rotate(angle2D);
+
+  // Top cone
+  const grad = ctx.createLinearGradient(-20, -topLen, 20, 0);
+  grad.addColorStop(0, "#06b6d4");
+  grad.addColorStop(1, "#0e7490");
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(0, -topLen);
+  ctx.lineTo(20, 0);
+  ctx.lineTo(-20, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#22d3ee";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Rim
+  ctx.fillStyle = "#0891b2";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 20, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Spin lines
+  ctx.strokeStyle = "rgba(255,255,255,0.4)";
+  ctx.lineWidth = 1;
+  const spinPhase = omega * Date.now() * 0.003;
+  for (let i = 0; i < 4; i++) {
+    const a = spinPhase + i * Math.PI / 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -topLen + 10);
+    ctx.lineTo(Math.cos(a) * 18, Math.sin(a) * 5 - 10);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  // Angular momentum vector L (yellow, from tip upward)
+  const lScale = 80;
+  ctx.save();
+  ctx.strokeStyle = "#fbbf24";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(axisX, axisY);
+  const lEndX = axisX + Math.sin(theta) * Math.cos(precessionAngle) * lScale * 0.5;
+  const lEndY = axisY - Math.cos(theta) * lScale * 0.5;
+  ctx.lineTo(lEndX, lEndY);
+  drawArrow(ctx, lEndX, lEndY, Math.atan2(lEndY - axisY, lEndX - axisX));
+  ctx.stroke();
+  ctx.fillStyle = "#fbbf24";
+  ctx.font = "bold 12px sans-serif";
+  ctx.fillText("L", lEndX + 6, lEndY - 4);
+  ctx.restore();
+
+  // Gravity torque vector (red, horizontal tangential)
+  const tauX = pivotX + Math.cos(precessionAngle + Math.PI / 2) * 60;
+  const tauY = pivotY - 160 * Math.cos(theta);
+  ctx.save();
+  ctx.strokeStyle = "#f87171";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(axisX, axisY);
+  ctx.lineTo(tauX, tauY);
+  drawArrow(ctx, tauX, tauY, Math.atan2(tauY - axisY, tauX - axisX));
+  ctx.stroke();
+  ctx.fillStyle = "#f87171";
+  ctx.font = "bold 12px sans-serif";
+  ctx.fillText("τ", tauX + 4, tauY - 4);
+  ctx.restore();
+
+  // Precession arrow
+  ctx.save();
+  ctx.strokeStyle = "#4ade80";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 3]);
+  ctx.beginPath();
+  ctx.arc(pivotX, pivotY, 80, precessionAngle - 0.4, precessionAngle + 0.4);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "#4ade80";
+  ctx.font = "bold 12px sans-serif";
+  ctx.fillText("Ω", pivotX + 85 * Math.cos(precessionAngle), pivotY + 85 * Math.sin(precessionAngle) - 4);
+  ctx.restore();
+
+  // Pivot point
+  ctx.fillStyle = "#e2e8f0";
+  ctx.beginPath();
+  ctx.arc(pivotX, pivotY, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Theta angle indicator
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.3)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(pivotX, pivotY);
+  ctx.lineTo(pivotX, pivotY - 60);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  ctx.font = "11px sans-serif";
+  ctx.fillText("θ", pivotX + 8, pivotY - 35);
+  ctx.restore();
+}
+
+function drawArrow(ctx, x, y, angle) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(-10, -5);
+  ctx.lineTo(-10, 5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function animate(ts) {
+  const { Omega } = getParams();
+  precessionAngle += Omega * 0.016;
+  drawTop();
+  updateDisplays();
+  animFrame = requestAnimationFrame(animate);
+}
+
+["spinRate", "tiltAngle", "massSl"].forEach(id => {
+  document.getElementById(id).addEventListener("input", updateDisplays);
+});
+
+animate();
+</script>
+</body>
+</html>
